@@ -60,9 +60,16 @@ i=grep("ENSG00000213754",rownames(input))          # PANC754
 i=grep("ENSG00000181896",rownames(input))          # ZNF101
 i=grep("ENSG00000131849",rownames(input))          # ZNF132
 i=grep(Symbol2ENSG("NCOA4")[1,2],rownames(input))  # NCOA4
-i=grep(Symbol2ENSG("SLC7A11")[1,2],rownames(input))  # NCOA4
+i=grep(Symbol2ENSG("SLC7A11")[1,2],rownames(input))# SLC7A11
+i=grep(Symbol2ENSG("SAT2")[1,2],rownames(input))   # SAT2
+i=grep(Symbol2ENSG("GSS")[1,2],rownames(input))    # GSS
+
+xii<-read.table("https://raw.githubusercontent.com/Shicheng-Guo/ferroptosis/master/codependency.txt",as.is=T)[,1]
+xii<-read.table("https://raw.githubusercontent.com/Shicheng-Guo/ferroptosis/master/codependency.txt",as.is=T)[,1]
 
 out2<-c()
+for(ii in xii){
+i=grep(Symbol2ENSG(ii)[1,2],rownames(input))   # GSS
 HR<-c()
 for(TCGAProject in TCGAProjects){
   newdata<-input[,phen$project_id==paste("TCGA-",TCGAProject,sep="")]
@@ -106,8 +113,7 @@ forest(m,leftlabs = rownames(HR),
        print.I2.ci = TRUE,
        digits.sd = 2,fontsize=9,xlim=c(0.2,3))
 dev.off()
-
-colnames(out2)<-c("TE.fixed","lower.fixed","upper.fixed","pval.fixed","TE.random","lower.random","upper.random","pval.random")
 write.table(HR,file=paste(ENSG2Symbol(rownames(input)[i]),"-",rownames(input)[i],".OS.HR.EACH.txt",sep=""),sep="\t",quote=F,col.names=NA,row.names=T)
+}
+colnames(out2)<-c("TE.fixed","lower.fixed","upper.fixed","pval.fixed","TE.random","lower.random","upper.random","pval.random")
 write.csv(out2,file=paste(ENSG2Symbol(rownames(input)[i]),"-",rownames(input)[i],".OS.HR.OVERALL.csv",sep=""),quote=F)
-
