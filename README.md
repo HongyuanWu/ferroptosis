@@ -1,6 +1,7 @@
 
 Timeline: 
 
+* 2020/01/09: SLC7A11, SAT2 and NCOA4 are quite interesting to be validated in the further study.
 * 2020/01/09: updated meta-dge and meta-os script and to merge them to identifiy the best candidate
 * CRSIP-CAS9 data indicate TFRC, TAX1BP1 and NCOA4 are in a single-line cascade pathway ([co-dependency>0.25](https://depmap.org/portal/gene/NCOA4?tab=overview))
 * KEGG: https://www.genome.jp/dbget-bin/www_bget?pathway+hsa04216
