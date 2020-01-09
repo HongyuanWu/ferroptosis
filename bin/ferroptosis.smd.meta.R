@@ -1,69 +1,8 @@
-
-id2phen4<-function(filename){
-  library("stringr")
-  as.array(str_extract(filename,"TCGA-[0-9|a-z|A-Z]*-[0-9|a-z|A-Z]*-[0-9]*"))
-}
-
-id2phen3<-function(filename){
-  library("stringr")
-  as.array(str_extract(filename,"TCGA-[0-9|a-z|A-Z]*-[0-9|a-z|A-Z]*"))
-}
-
-id2bin<-function(filename){
-  library("stringr")
-  filename<-as.array(str_extract(filename,"TCGA-[0-9|a-z|A-Z]*-[0-9|a-z|A-Z]*-[0-9]*"))
-  as.numeric(lapply(strsplit(filename,"-"),function(x) x[4]))
-}
-
-RawNARemove<-function(data,missratio=0.3){
-  threshold<-(missratio)*ncol(data)
-  NaRaw<-which(apply(data,1,function(x) sum(is.na(x))>=threshold))
-  zero<-which(apply(data,1,function(x) all(x==0))==T)
-  NaRAW<-c(NaRaw,zero)
-  if(length(NaRAW)>0){
-    output<-data[-NaRAW,]
-  }else{
-    output<-data;
-  }
-  output
-}
-
-RawZeroRemove<-function(data,missratio=0.5){
-  threshold<-(missratio)*ncol(data)
-  NaRaw<-which(apply(data,1,function(x) sum(is.na(x))>=threshold))
-  zero<-which(apply(data,1,function(x) sum(x==0)>=threshold))
-  NaRAW<-c(NaRaw,zero)
-  if(length(NaRAW)>0){
-    output<-data[-NaRAW,]
-  }else{
-    output<-data;
-  }
-  output
-}
-
-
-Symbol2ENSG<-function(Symbol){
-  db<-read.table("https://raw.githubusercontent.com/Shicheng-Guo/AnnotationDatabase/master/ENSG.ENST.ENSP.Symbol.hg19.bed",sep="\t")
-  ENSG<-as.character(db[match(Symbol,db$V4),8])
-  ENSG<-na.omit(data.frame(Symbol,ENSG))
-  return(ENSG)
-}
-ENSG2Symbol<-function(ENSG){
-  db<-read.table("https://raw.githubusercontent.com/Shicheng-Guo/AnnotationDatabase/master/ENSG.ENST.ENSP.Symbol.hg19.bed",sep="\t")
-  ENSG<-unlist(lapply(strsplit(ENSG,split="[.]"),function(x) x[1]))
-  Symbol<-db[match(as.character(ENSG),db$V8),4]
-  return(Symbol)
-}
-
-library("metafor")
-
-setwd("~/hpc/methylation/Pancancer/RNA-seq")
-
-                   source("https://raw.githubusercontent.com/Shicheng-Guo/GscRbasement/master/GscTools.R")
-library("metafor")
+source("https://raw.githubusercontent.com/Shicheng-Guo/GscRbasement/master/GscTools.R")
 library("meta")
-load("rnaseqdata.pancancer.RData")
-
+library("metafor")
+library("survival")
+library("survminer")
 
 Symbol2ENSG<-function(Symbol){
   db<-read.table("https://raw.githubusercontent.com/Shicheng-Guo/AnnotationDatabase/master/ENSG.ENST.ENSP.Symbol.hg19.bed",sep="\t")
@@ -84,6 +23,16 @@ ensg2bed<-function(ENSG){
   bed<-unique(db[db$V5 %in% as.character(ENSG),c(1,2,3,5)])
   return(bed)
 }
+
+chr2num<-function(x){
+x<-output$V1
+x<-gsub("chr","",x)
+x[x=="X"]<-23
+x[x=="Y"]<-24
+return(x)
+}
+
+load("~/hpc/methylation/Pancancer/RNA-seq/rnaseqdata.pancancer.RData")
 
 TCGAProjects=c("BLCA","BRCA","CESC","CHOL","COAD","ESCA","GBM","HNSC","KICH","KIRC","KIRP","LIHC","LUAD","LUSC","PAAD","PCPG","PRAD","READ","SARC","STAD","THCA","THYM","UCEC")
 phen1=read.table("~/hpc/methylation/TCGA-clinical-11093.tsv",header = T,sep="\t")
@@ -109,23 +58,64 @@ input<-rnaseqdata[,idx]
 idx<-which(phen$pid %in% paste("TCGA-",TCGAProjects,sep=""))
 phen<-phen[idx,]
 input<-input[,idx]
-input[1:5,1:5]
+noise<-abs(matrix(rnorm(ncol(input)*nrow(input),0,0.01),nrow=nrow(input),ncol=ncol(input)))
+input<-input+noise
 
 input<-log(input+1,2)
 input<-RawNARemove(input)
-input<-RawZeroRemove(input)
+#input<-RawZeroRemove(input)
 
-xxxv<-read.csv("https://raw.githubusercontent.com/Shicheng-Guo/ferroptosis/master/ferroptosis.genelist.csv",head=F)
-ENSG<-Symbol2ENSG(as.character(xxxv[,2]))
+# xxxv<-read.table("https://raw.githubusercontent.com/Shicheng-Guo/ferroptosis/master/tsg.positivecontrol.txt",head=F)
+# xxxv<-read.table("https://raw.githubusercontent.com/Shicheng-Guo/esophageal/master/phase1.genelist.txt",head=F)
+# xxxv<-read.table("https://raw.githubusercontent.com/Shicheng-Guo/breast/master/target.txt",head=T)
+# xxxv<-read.table("https://raw.githubusercontent.com/Shicheng-Guo/cholangiocarcinoma/master/cholangiocarcinoma.hg19.bed",head=T,as.is=T,sep="\t")
+# xxxv<-read.table("https://raw.githubusercontent.com/Shicheng-Guo/drugtarget/master/extdata/2993drugtarget.txt",sep="\t",as.is=T)[,1]
+# xxxv<-read.table("https://raw.githubusercontent.com/Shicheng-Guo/encode/master/TFBS/685TFBS.txt",sep="\t",as.is=T)[,1]
+# xxxv<-read.table("https://raw.githubusercontent.com/Shicheng-Guo/cholangiocarcinoma/master/cholangiocarcinoma.V2.hg19.bed",sep="\t",as.is=T)[,4]
+# xxxv<-read.table("https://raw.githubusercontent.com/Shicheng-Guo/cldn6/master/cldn6.kegg.list.txt",sep="\t",as.is=T)[,3]
+# xxxv<-read.table("https://raw.githubusercontent.com/Shicheng-Guo/lncRNA/master/extdata/tcgameta/1668.ncRNA.dge.txt",sep="\t",as.is=T)[,1]
+# xxxv<-read.table("https://raw.githubusercontent.com/Shicheng-Guo/encode/master/TFBS/1639TF.txt",sep="\t",as.is=T)[,1]
+# xxxv<-read.table("https://raw.githubusercontent.com/Shicheng-Guo/epifactors/master/epifactors.txt",sep="\t",as.is=T)[,1]
+xxxv<-read.csv("https://raw.githubusercontent.com/Shicheng-Guo/ferroptosis/master/ferroptosis.genelist.csv",head=F)[,2]
+
+# mkdir /mnt/bigdata/Genetic/Projects/shg047/meta/tfbs/
+# mkdir /mnt/bigdata/Genetic/Projects/shg047/meta/tfbs/os
+# mkdir /mnt/bigdata/Genetic/Projects/shg047/meta/tfbs/dge
+
+# setwd("~/hpc/methylation/chol/meta/dge")
+# setwd("/mnt/bigdata/Genetic/Projects/shg047/meta/drug/dge")
+# setwd("/mnt/bigdata/Genetic/Projects/shg047/meta/drug")
+# setwd("/mnt/bigdata/Genetic/Projects/shg047/meta/tfbs/os")
+# setwd("/mnt/bigdata/Genetic/Projects/shg047/meta/tfbs/dge")
+# setwd("/home/guosa/hpc/methylation/chol/meta/dge")
+# setwd("/mnt/bigdata/Genetic/Projects/shg047/meta/cldn6")
+# setwd("/mnt/bigdata/Genetic/Projects/shg047/meta/lncRNA")
+# setwd("/mnt/bigdata/Genetic/Projects/shg047/meta/tfbs")
+# setwd("/mnt/bigdata/Genetic/Projects/shg047/meta/epifactor")
+setwd("/mnt/bigdata/Genetic/Projects/shg047/meta/ferroptosis")
+
+# library(limma)
+# library(AnnotationDbi)
+# library(org.Hs.eg.db)
+# tab <- getGeneKEGGLinks(species="hsa")
+# tab$Symbol <- mapIds(org.Hs.eg.db, tab$GeneID,column="SYMBOL", keytype="ENTREZID")
+# head(tab)
+# kegg<-read.table("https://raw.githubusercontent.com/Shicheng-Guo/cldn6/master/cldn6.kegg.txt",as.is=T)[,1]
+# out<-unique(tab[tab$PathwayID %in% paste("path:",kegg,sep=""),])
+# write.table(out,file="cldn6.kegg.list.txt",quote=F,col.names=T,row.names=F,sep="\t")
+# write.csv(out,file="cldn6.kegg.list.csv",quote=F)
+# xxxv<-as.character(xout$Symbol)
+
+ENSG<-Symbol2ENSG(unique(as.character(xxxv)))
 xgene<-c(as.character(ENSG[,2]))
-ii<-unlist(lapply(xgene,function(x) grep(x,rownames(input))))
+ii<-na.omit(unique(unlist(lapply(xgene,function(x) grep(x,rownames(input))))))
 
 Seq<-paste(phen$project_id,phen$phen2,sep="-")
 rlt<-c()
 coll<-c()
-
+z<-1
 for(i in ii){
-  print(i)
+  z<-z+1
   mean<-tapply(as.numeric(input[i,]),Seq,function(x) mean(x,na.rm=T))
   sd<-tapply(as.numeric(input[i,]),Seq,function(x) sd(x,na.rm=T))
   num<-tapply(as.numeric(input[i,]),Seq,function(x) length(x))
@@ -150,7 +140,8 @@ for(i in ii){
              sm="SMD")
 
   Symbol<-ENSG2Symbol(rownames(input)[i])
-  pdf(paste("/home/local/MFLDCLIN/guosa/hpc/project/ferroptosis/",Symbol,"-",rownames(input)[i],".SMD.PANC.pdf",sep=""))
+  print(c(z,i,as.character(Symbol)))
+  pdf(paste(Symbol,"-",rownames(input)[i],".SMD.PANC.pdf",sep=""))
   forest(m,leftlabs = Source,
          lab.e = "Intervention",
          pooled.totals = FALSE,
@@ -164,25 +155,37 @@ for(i in ii){
          digits.sd = 2,fontsize=8)
   dev.off()
 }
-rownames(rlt)<-ENSG2Symbol(rownames(input)[coll])
+rownames(rlt)<-rownames(input)[ii]
 colnames(rlt)<-c("idx","beta","pval","cilb","ciub","i2","tau2")
-rlt<-data.frame(rlt)
-head(rlt[order(rlt$pval),])
-write.table(rlt,file="/home/local/MFLDCLIN/guosa/hpc/project/ferroptosis/ferroptosis.meta.table.pvalue.txt",sep="\t",quote=F,col.names = NA,row.names = T)
+rlt2<-data.frame(rlt)
+rlt2<-rlt2[order(rlt2$pval),]
+rlt2$symbol<-as.character(ENSG2Symbol(as.character(rownames(rlt2))))
+head(rlt2)
 
-rownames(rlt)<-rownames(input)[coll]
-bed<-ensg2bed(as.character(rownames(input)[coll]))
-xsel<-unlist(apply(bed,1,function(x) grep(x[4],rownames(rlt))))
-output<-data.frame(bed,rlt[xsel,])
+memo="ferroptosis.dge"
+
+# save dge to csv
+write.table(rlt2,file=paste(memo,".tcga.pancancer.smd.meta.pvalue.txt",sep=""),sep="\t",quote=F,col.names = NA,row.names = T)
+write.csv(rlt2,file=paste(memo,".tcga.pancancer.smd.meta.pvalue.csv",sep=""),quote=F)
+
+dim(subset(rlt2,pval<10^-8))
+up<-(subset(rlt2,beta>0 & pval<10^-8))
+down<-(subset(rlt2,beta<0 & pval<10^-8))
+write.csv(up,file=paste(memo,".up.tcga.pancancer.smd.meta.pvalue.csv",sep=""),quote=F)
+write.csv(down,file=paste(memo,".down.tcga.pancancer.smd.meta.pvalue.csv",sep=""),quote=F)
+
+# install.packages("CMplot")
 library("CMplot")
-cminput<-data.frame(SNP=output$V5,Chromosome=output$V1,Position=output$V2,trait1=output[,7])
-CMplot(cminput,plot.type="b",ylim=20,LOG10=TRUE,threshold=NULL,file="jpg",memo="",dpi=300,file.output=TRUE,verbose=TRUE,width=14,height=6)
+ensg<-read.table("~/hpc/db/hg19/ENSG.hg19.bed")
+output<-data.frame(ensg[match(unlist(lapply(strsplit(rownames(rlt2),"[.]"),function(x) x[1])),ensg[,5]),],rlt2)
 
-write.table(cminput,file="ferroptosis.pancancer.meta.dge.txt",sep="\t",quote=F,row.name=T,col.names=NA)
-
-
-
-
+cminput<-na.omit(data.frame(SNP=output$V5,Chromosome=chr2num(output$V1),Position=output$V2,trait1=output$pval,stringsAsFactors=F))
+CMplot(cminput,plot.type="b",memo=paste(memo,".fix",sep=""),LOG10=TRUE,threshold=NULL,file="jpg",dpi=300,file.output=TRUE,verbose=TRUE,width=14,height=6)
+write.table(cminput,file=paste(memo,".pval.manhattan.qqplot.meta.dge.1.txt",sep=""),sep="\t",quote=F,row.name=T,col.names=NA)
+cminput2<-cminput
+cminput2$symbol<-as.character(ENSG2Symbol(as.character(cminput2$SNP)))
+write.table(cminput2,file=paste(memo,".pval.manhattan.qqplot.meta.dge.2.txt",sep=""),sep="\t",quote=F,row.name=T,col.names=NA)
+write.csv(cminput2,file=paste(memo,".pval.manhattan.qqplot.meta.dge.2.csv",sep=""),quote=F)
 
 
 
